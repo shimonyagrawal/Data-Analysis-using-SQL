@@ -1,6 +1,6 @@
-CREATE USER 'nativeuser'@'localhost'IDENTIFIED WITH mysql_native_password BY 'password';
-
 USE employees; 
+
+/* SELECT, INSERT, UPDATE, DELETE */ 
 
 -- Select the information from the “dept_no” column of the “departments” table
 SELECT dept_no
@@ -294,6 +294,8 @@ INSERT INTO departments_dup(dept_no) VALUES
 ('d010'),
 ('d011');
 
+/* JOINS */	 
+	     
 -- Extract a list containing information about all managers’ employee number, first and last name, department number, and hire date. 
 SELECT e.emp_no, e.first_name, e.last_name, de.dept_no, e.hire_date
 FROM employees e
