@@ -5,7 +5,9 @@ The repository contains Basic SQL Commands, Operators, Aggregate Functions and J
 - SELECT, INSERT, UPDATE, DELETE
 - Aggregate Functions
 - Joins
-- Subqueries
-- Advanced SQL Topics: CASE, INDEX, TRIGGERS 
+- Subqueries 
+- Views
+- Stored Procedures 
+- Advanced SQL Topics: Variables, Indexes, Trigger and Case 
 - Integration with Tableau 
 
