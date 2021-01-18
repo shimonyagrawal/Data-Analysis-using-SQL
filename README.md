@@ -9,5 +9,5 @@ The repository contains Basic SQL Commands, Operators, Aggregate Functions and J
 - Views
 - Stored Procedures 
 - Advanced SQL Topics: Variables, Indexes, Trigger and Case 
-- Integration with Tableau 
+- [Integration with Tableau](https://public.tableau.com/profile/shimonyagrawal#!/vizhome/EmployeePerformanceacrossDepartments/Dashboard1?publish=yes)
 
