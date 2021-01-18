@@ -381,4 +381,466 @@ FROM
 	SELECT NULL AS emp_no, NULL AS first_name, NULL AS last_name, dm.dept_no, dm.from_date
     FROM dept_manager dm) AS a
 ORDER BY -a.emp_no DESC;
+	     
+/* SUB QUERIES */
+
+-- Extract the information about all department managers who were hired between the 1st of January 1990 and the 1st of January 1995. 
+
+SELECT 
+    *
+FROM
+    dept_manager
+WHERE
+    emp_no IN (SELECT 
+            emp_no
+        FROM
+            employees
+        WHERE
+            hire_date BETWEEN '1990-01-01' AND '1995');
+            
+-- Select the entire information for all employees whose job title is “Assistant Engineer”. 
+
+SELECT * 
+FROM employees e
+WHERE EXISTS (SELECT * 
+				FROM titles T
+                WHERE t.emp_no = e.emp_no AND title = 'Assistant Engineer');
+
+
+DROP TABLE IF EXISTS emp_manager;
+
+CREATE TABLE emp_manager (
+   emp_no INT(11) NOT NULL,
+   dept_no CHAR(4) NULL,
+   manager_no INT(11) NOT NULL
+);
+
+-- assign employee number 110022 as a manager to all employees from 10001 to 10020 (this must be subset A), 
+-- and employee number 110039 as a manager to all employees from 10021 to 10040 (this must be subset B).
+INSERT INTO emp_manager
+SELECT 
+    U.*
+FROM
+    (SELECT 
+        A.*
+    FROM
+        (SELECT 
+        e.emp_no AS employee_ID,
+            MIN(de.dept_no) AS department_code,
+            (SELECT 
+                    emp_no
+                FROM
+                    dept_manager
+                WHERE
+                    emp_no = 110022) AS manager_ID
+    FROM
+        employees e
+    JOIN dept_emp de ON e.emp_no = de.emp_no
+    WHERE
+        e.emp_no <= 10020
+    GROUP BY e.emp_no
+    ORDER BY e.emp_no) AS A UNION SELECT 
+        B.*
+    FROM
+        (SELECT 
+        e.emp_no AS employee_ID,
+            MIN(de.dept_no) AS department_code,
+            (SELECT 
+                    emp_no
+                FROM
+                    dept_manager
+                WHERE
+                    emp_no = 110039) AS manager_ID
+    FROM
+        employees e
+    JOIN dept_emp de ON e.emp_no = de.emp_no
+    WHERE
+        e.emp_no > 10020
+    GROUP BY e.emp_no
+    ORDER BY e.emp_no
+    LIMIT 20) AS B UNION SELECT 
+        C.*
+    FROM
+        (SELECT 
+        e.emp_no AS employee_ID,
+            MIN(de.dept_no) AS department_code,
+            (SELECT 
+                    emp_no
+                FROM
+                    dept_manager
+                WHERE
+                    emp_no = 110039) AS manager_ID
+    FROM
+        employees e
+    JOIN dept_emp de ON e.emp_no = de.emp_no
+    WHERE
+        e.emp_no = 110022
+    GROUP BY e.emp_no) AS C UNION SELECT 
+        D.*
+    FROM
+        (SELECT 
+        e.emp_no AS employee_ID,
+            MIN(de.dept_no) AS department_code,
+            (SELECT 
+                    emp_no
+                FROM
+                    dept_manager
+                WHERE
+                    emp_no = 110022) AS manager_ID
+    FROM
+        employees e
+    JOIN dept_emp de ON e.emp_no = de.emp_no
+    WHERE
+        e.emp_no = 110039
+    GROUP BY e.emp_no) AS D) AS U;
+    
+SELECT * 
+	FROM emp_manager
+ORDER BY emp_manager.emp_no; 
+
+SELECT e1.*
+	FROM emp_manager e1 
+		JOIN emp_manager e2 ON e1.emp_no = e2.manager_no;
+
+/* VIEWS */ 
+
+CREATE VIEW v_dept_emp_latest_date AS 
+	SELECT emp_no, MAX(from_date) AS from_date, MAX(to_date) AS to_date 
+		FROM dept_emp 
+	GROUP BY emp_no; 
+    
+CREATE OR REPLACE VIEW v_average_salary_managers AS
+    SELECT 
+        ROUND(AVG(salary), 2)
+    FROM
+        salaries s
+            JOIN
+        dept_manager m ON s.emp_no = m.emp_no;
+	
+/* STORED PROCEDURES - Routines and Functions */ 
+
+DROP PROCEDURE IF EXISTS select_employees;
+DELIMITER $$ 
+CREATE PROCEDURE select_employees()
+BEGIN 
+	SELECT * FROM employees 
+    LIMIT 500; 
+END $$
+DELIMITER ;
+
+CALL employees.select_employees();
+
+-- Create a procedure that will provide the average salary of all employees.
+ 
+DROP PROCEDURE IF EXISTS avg_salary;
+DELIMITER $$ 
+CREATE PROCEDURE avg_salary()
+BEGIN 
+	SELECT AVG(salary) 
+		FROM salaries; 
+END $$
+DELIMITER ;
+
+CALL avg_salary();
+
+DROP PROCEDURE IF EXISTS emp_salary;
+DELIMITER $$ 
+CREATE PROCEDURE emp_salary(IN p_emp_no INTEGER)
+BEGIN 
+	SELECT e.first_name, e.last_name, s.salary, s.to_date, s.from_date
+		FROM employees e
+			JOIN salaries s ON e.emp_no = s.emp_no 
+	WHERE e.emp_no = p_emp_no; 
+END $$
+DELIMITER ;
+
+CALL emp_salary();
+
+DROP PROCEDURE IF EXISTS avg_emp_salary;
+DELIMITER $$ 
+CREATE PROCEDURE avg_emp_salary(IN p_emp_no INTEGER)
+BEGIN 
+	SELECT e.first_name, e.last_name, AVG(s.salary)
+		FROM employees e
+			JOIN salaries s ON e.emp_no = s.emp_no 
+	WHERE e.emp_no = p_emp_no; 
+END $$
+DELIMITER ;
+
+CALL avg_emp_salary(11300);
+
+DROP PROCEDURE IF EXISTS avg_emp_salary_out;
+DELIMITER $$ 
+CREATE PROCEDURE avg_emp_salary_out(IN p_emp_no INTEGER, OUT p_average_salary DECIMAL(10,2))
+BEGIN 
+	SELECT e.first_name, e.last_name, AVG(s.salary)
+    INTO p_average_salary 
+		FROM employees e
+			JOIN salaries s ON e.emp_no = s.emp_no 
+	WHERE e.emp_no = p_emp_no; 
+END $$
+DELIMITER ;
+
+SET @v_avg_salary = 0; 
+CALL employees.avg_emp_salary_out(11300, @v_avg_salary); 
+SELECT @v_avg_salary; 
+
+-- Create a procedure called ‘emp_info’ that uses as parameters the first and the last name of an individual, and 
+-- returns their employee number.
+
+DROP PROCEDURE IF EXISTS emp_info;
+
+DELIMITER $$ 
+CREATE PROCEDURE emp_info(IN p_first_name VARCHAR(255), IN p_last_name VARCHAR(255), OUT p_emp_no INTEGER)
+BEGIN 
+	SELECT e.emp_no
+    INTO p_emp_no
+		FROM employees e
+	WHERE e.first_name = p_first_name AND e.last_name = p_last_name; 
+END $$
+DELIMITER ;
+
+SET @v_emp_no = 0; 
+CALL employees.emp_info('Aruna', 'Journel', @v_emp_no); 
+SELECT @v_emp_no; 
+
+-- User Defined Functions 
+
+DROP FUNCTION IF EXISTS f_emp_avg_salary;
+
+DELIMITER $$ 
+CREATE FUNCTION f_emp_avg_salary(p_emp_no INTEGER) RETURNS DECIMAL(10,2)
+DETERMINISTIC 
+BEGIN 
+DECLARE v_avg_salary DECIMAL (10,2);
+SELECT 
+    AVG(s.salary)
+INTO v_avg_salary FROM
+    employees e
+        JOIN
+    salaries s ON e.emp_no = s.emp_no
+WHERE
+    e.emp_no = p_emp_no;
+RETURN v_avg_salary;
+END $$
+DELIMITER ;
+
+SELECT f_emp_avg_salary(11301);
+
+-- Functions 
+-- Create a function called ‘emp_info’ that takes for parameters the first and last name of an employee, and 
+-- returns the salary from the newest contract of that employee.
+
+DROP FUNCTION IF EXISTS emp_info;
+
+DELIMITER $$ 
+CREATE FUNCTION emp_info(p_first_name VARCHAR(255), p_last_name VARCHAR(255)) RETURNS DECIMAL(10,2)
+DETERMINISTIC 
+BEGIN 
+DECLARE v_salary DECIMAL (10,2);
+DECLARE v_max_date DATE;
+
+SELECT 
+    MAX(from_date)
+INTO v_max_date FROM
+    employees e
+        JOIN
+    salaries s ON e.emp_no = s.emp_no
+WHERE
+    e.first_name = p_first_name AND e.last_name = p_last_name;
+    
+SELECT 
+    s.salary
+INTO v_salary FROM
+    employees e
+        JOIN
+    salaries s ON e.emp_no = s.emp_no
+WHERE
+    e.first_name = p_first_name AND e.last_name = p_last_name AND s.from_date = v_max_date;
+RETURN v_salary;
+END $$
+DELIMITER ;
+
+SELECT emp_info('Aruna', 'Journel');
+
+/* ADVANCED SQL - Variables, Triggers, Indexes, Case */ 
+
+-- VARIABLE 
+/*
+Scope = Visibility
+There are 3 types of MySQL Variables:
+	- Local Variable
+    - Session Variable
+    - Global Varaible
+    
+    
+*** Local Variable: ***
+- a variable that is only visible only in the BEGIN - END block in which it was created.
+- Only user defined variable can be used as local variable.
+	DECLARE v_my_local_variable;
+    
+    
+*** Session Variable: ***
+- a variable that exists only for the session in which we are operating.
+- It is defined on our server and it lives there
+- It is visible to the connection being used only.
+- Both user defined and system defiend variables can be used as session variables. (BUT some system varialbes are limited only for global variables)
+	
+    SET @var_name = value;
+    
+    Example:
+	SET @s_var1 = 3;
+    SELECT @s_var1;
+    
+*** Global Variable: ***
+- applies to all connections related to a specific server.
+	SET GLOBAL var_name = value;   (OR)
+    
+    SET @@global.var_name = value;
+    
+    System variables are types of pre-defined Global Variables. (such as max_connections, max_join_size)
+    Only system variables can be used as Global Variables.
+    Example: SET @@global.max_connections = 1; (if set like that, only 1 connection can be connected to server)
+*/
+
+-- TRIGGER
+
+DELIMITER $$
+
+CREATE TRIGGER before_salaries_insert
+BEFORE INSERT ON salaries
+FOR EACH ROW
+BEGIN 
+	IF NEW.salary < 0 THEN 
+		SET NEW.salary = 0; 
+	END IF; 
+END $$
+
+DELIMITER ;
+
+# Let’s check the values of the “Salaries” table for employee 10001.
+SELECT 
+    *
+FROM
+    salaries
+WHERE
+    emp_no = '10001';
+    
+# Now, let’s insert a new entry for employee 10001, whose salary will be a negative number.
+INSERT INTO salaries VALUES ('10001', -92891, '2010-06-22', '9999-01-01');
+
+# Let’s run the same SELECT query to see whether the newly created record has a salary of 0 dollars per year.
+SELECT 
+    *
+FROM
+    salaries
+WHERE
+    emp_no = '10001';
+    
+-- Create a trigger that checks if the hire date of an employee is higher than the current date. 
+-- If true, set this date to be the current date. 
+-- Format the output appropriately (YY-MM-DD). 
+
+DELIMITER $$
+
+CREATE TRIGGER trig_hire_date 
+BEFORE INSERT ON employees
+FOR EACH ROW
+BEGIN 
+	IF NEW.hire_date < DATE_FORMAT(SYSDATE(), '%Y-%M-%D') THEN 
+		SET NEW.hire_date = DATE_FORMAT(SYSDATE(), '%Y-%M-%D'); 
+	END IF; 
+END $$
+DELIMITER ;
+
+INSERT employees VALUES ('999904', '1970-01-31', 'John', 'Johnson', 'M', '2025-01-01');  
+
+SELECT  *  FROM  employees ORDER BY emp_no DESC;
+
+-- INDEXES
+
+CREATE INDEX i_hire_date 
+ON employees (hire_date);
+
+CREATE INDEX i_composite 
+ON employees (first_name, last_name); 
+
+SELECT * FROM employees WHERE first_name = 'Georgi' AND last_name = 'Facello';
+
+-- Select all records from the ‘salaries’ table of people whose salary is higher than $89,000 per annum.
+-- Then, create an index on the ‘salary’ column of that table, and check if it has sped up the search of the same SELECT statement. 
+
+SELECT * FROM salaries WHERE salary > 89000;
+
+CREATE INDEX i_salary 
+ON salaries (salary);
+
+SELECT * FROM salaries WHERE salary > 89000;
+
+-- CASE 
+
+SELECT 
+    dm.emp_no,
+    e.first_name,
+    e.last_name,
+    MAX(s.salary) - MIN(s.salary) AS salary_difference,
+    CASE
+        WHEN MAX(s.salary) - MIN(s.salary) > 30000 THEN 'Salary was raised by more than $30,000'
+        WHEN MAX(s.salary) - MIN(s.salary) BETWEEN 20000 AND 30000 THEN 'Salary was raised more than $20,000 but less then $30,000'
+        ELSE 'Salary was raised less than $20,000'
+    END
+FROM
+    dept_manager dm
+        JOIN
+    employees e ON e.emp_no = dm.emp_no
+        JOIN
+    salaries s ON s.emp_no = e.emp_no
+GROUP BY s.emp_no;
+
+-- Obtain a result set containing the employee number, first name, and last name of all employees with a number higher than 109990. 
+-- Create a fourth column in the query, indicating whether this employee is also a manager, 
+-- according to the data provided in the dept_manager table, or a regular employee. 
+
+SELECT 
+    e.emp_no,
+    e.first_name,
+    e.last_name,
+    CASE
+        WHEN dm.emp_no IS NOT NULL THEN 'Manager'
+        ELSE 'Employee'
+    END
+FROM
+    dept_manager dm
+        JOIN
+    employees e ON e.emp_no = dm.emp_no
+WHERE
+    e.emp_no > 109990;
+    
+   
+SELECT  dm.emp_no, e.first_name, e.last_name, MAX(s.salary) - MIN(s.salary) AS salary_difference,  
+    IF(MAX(s.salary) - MIN(s.salary) > 30000, 'Salary was raised by more then $30,000', 'Salary was NOT raised by more then $30,000') 
+    AS salary_increase  
+FROM dept_manager dm  
+	JOIN employees e ON e.emp_no = dm.emp_no  
+    JOIN  salaries s ON s.emp_no = dm.emp_no  
+GROUP BY s.emp_no;
+
+-- Extract the employee number, first name, and last name of the first 100 employees, 
+-- and add a fourth column, called “current_employee” saying “Is still employed” 
+-- if the employee is still working in the company, or “Not an employee anymore” if they aren’t.  
+
+SELECT 
+    e.emp_no,
+    e.first_name,
+    e.last_name,
+    CASE 
+		WHEN MAX(de.to_date) > SYSDATE() THEN 'Is still employed'
+		ELSE'Not an employee anymore'
+    END AS current_employee
+FROM
+    employees e
+        JOIN
+    dept_emp de ON e.emp_no = de.emp_no
+GROUP BY de.emp_no
+LIMIT 100; 	     
 
